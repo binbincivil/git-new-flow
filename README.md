@@ -8,14 +8,8 @@ for [new git branching model](https://blog.csdn.net/bingospunky/article/details/
 Installing git-nflow
 -------------------
 
-
-
-
-
-
-
-
-
+		curl -L -O https://raw.githubusercontent.com/binbincivil/git-new-flow/master/contrib/gitnflow-installer.sh
+		sudo bash gitnflow-installer.sh
 
 
 ### Initialization
@@ -52,15 +46,15 @@ The ``-d`` flag will accept all defaults.
 
 * To merge feature branch into develop/test/preview branch, use:
   
-  		git nflow release dev [<name|nameprefix>]
-  		git nflow release test [<name|nameprefix>]
-  		git nflow release preview [<name|nameprefix>]
+  		git nflow feature dev [<name|nameprefix>]
+  		git nflow feature test [<name|nameprefix>]
+  		git nflow feature preview [<name|nameprefix>]
 
 * To finish feature branches(merge branch into master branch), use:
   
-  		git nflow release finish [<name|nameprefix>]
+  		git nflow feature finish [<name|nameprefix>]
 
 * To delete feature branches, use:
   
-  		git nflow release finish [<name|nameprefix>]
+  		git nflow feature delete [<name|nameprefix>]
   

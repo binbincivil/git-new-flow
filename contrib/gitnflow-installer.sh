@@ -12,9 +12,7 @@ if [ -z "$REPO_NAME" ] ; then
 fi
 
 if [ -z "$REPO_HOME" ] ; then
-    # TODO: replace with github url
-#	REPO_HOME="http://github.com/binbincivil/git-new-flow.git"
-	REPO_HOME="git@git.mabinbin.com:binbincivil/git-new-flow.git"
+	REPO_HOME="https://github.com/binbincivil/git-new-flow.git"
 fi
 
 EXEC_FILES="git-nflow"
