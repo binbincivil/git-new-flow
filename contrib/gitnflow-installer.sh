@@ -16,7 +16,7 @@ if [ -z "$REPO_HOME" ] ; then
 fi
 
 EXEC_FILES="git-nflow"
-SCRIPT_FILES="git-nflow-init git-nflow-feature git-nflow-version git-nflow-common gitnflow-gitflow-common gitnflow-shFlags"
+SCRIPT_FILES="git-nflow-init git-nflow-feature git-nflow-version gitnflow-common gitnflow-gitflow-common gitnflow-shFlags"
 SUBMODULE_GITFLOW="gitnflow-gitflow-common"
 SUBMODULE_SHFLAGS="gitnflow-shFlags"
 
