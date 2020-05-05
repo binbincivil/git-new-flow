@@ -1,0 +1,96 @@
+#!/bin/sh
+
+
+#### common
+
+git_do() {
+  # equivalent to git, used to indicate actions that make modifications
+  if flag show_commands; then
+    echo "gitnflow do: git $@" >&2
+  fi
+  git "$@"
+}
+
+#### args has repetition
+#### true: has false:not has
+has_repetition() {
+    local num1=$(
+        for i in $* ; do
+			echo "$i";
+		done | wc -l
+    )
+
+    local num2=$(
+        for i in $* ; do
+			echo "$i";
+		done | sort -u | wc -l
+    )
+    [ $num1 != $num2 ]
+}
+
+
+#
+# gitnflow specific common functionality
+#
+
+# check if this repo has been inited for gitnflow
+gitnflow_has_develop_configured() {
+	local develop=$(git config --get gitnflow.branch.develop)
+	[ "$develop" != "" ] && git_local_branch_exists "$develop"
+}
+
+gitnflow_has_test_configured() {
+	local test=$(git config --get gitnflow.branch.test)
+	[ "$test" != "" ] && git_local_branch_exists "$test"
+}
+
+gitnflow_has_preview_configured() {
+	local preview=$(git config --get gitnflow.branch.preview)
+	[ "$preview" != "" ] && git_local_branch_exists "$preview"
+}
+
+gitnflow_has_master_configured() {
+	local master=$(git config --get gitnflow.branch.master)
+	[ "$master" != "" ] && git_local_branch_exists "$master"
+}
+
+gitnflow_has_remote_configured() {
+	local remote=$(git config --get gitnflow.remote)
+	[ "$remote" != "" ]
+}
+
+gitnflow_has_prefixes_configured() {
+	git config --get gitnflow.prefix.feature >/dev/null 2>&1
+}
+
+gitnflow_is_initialized() {
+    local master=$(git config --get gitnflow.branch.master)
+    local develop=$(git config --get gitnflow.branch.develop)
+    local test=$(git config --get gitnflow.branch.test)
+    local preview=$(git config --get gitnflow.branch.preview)
+
+	gitnflow_has_master_configured                              && \
+	gitnflow_has_develop_configured                             && \
+	gitnflow_has_test_configured                                && \
+	gitnflow_has_preview_configured                             && \
+	gitnflow_has_remote_configured                              && \
+	! has_repetition "$master" "$develop" "$test" "$preview"    && \
+	gitnflow_has_prefixes_configured
+}
+
+# loading settings that can be overridden using git config
+gitnflow_load_settings() {
+	export DOT_GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+	export DEVELOP_BRANCH=$(git config --get gitnflow.branch.develop)
+	export TEST_BRANCH=$(git config --get gitnflow.branch.test)
+	export PREVIEW_BRANCH=$(git config --get gitnflow.branch.preview)
+	export MASTER_BRANCH=$(git config --get gitnflow.branch.master)
+	export REMOTE=$(git config --get gitnflow.remote)
+}
+
+require_gitnflow_initialized() {
+	if ! gitnflow_is_initialized; then
+		die "fatal: Not a gitnflow-enabled repo yet. Please run \"git nflow init\" first."
+	fi
+}
+

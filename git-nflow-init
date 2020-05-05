@@ -1,0 +1,391 @@
+#!/bin/sh
+
+usage() {
+	echo "usage: git nflow init [-fd]"
+	echo "          -f force"
+	echo "          -d use default branch naming conventions"
+}
+
+parse_args() {
+	# parse options
+	FLAGS "$@" || exit $?
+	eval set -- "${FLAGS_ARGV}"
+}
+
+# Default entry when no SUBACTION is given
+cmd_default() {
+	DEFINE_boolean force false 'force setting of gitnflow branches, even if already configured' f
+	DEFINE_boolean defaults false 'use default branch naming conventions' d
+	parse_args "$@"
+
+	if ! git rev-parse --git-dir >/dev/null 2>&1; then
+		git_do init
+	else
+		# assure that we are not working in a repo with local changes
+		#### 这个仓库一个commit都没有 或者 仓库是干净的仓库
+		git_repo_is_headless || require_clean_working_tree
+	fi
+
+	# running git flow init on an already initialized repo is fine
+	if gitnflow_is_initialized && ! flag force; then
+		warn "Already initialized for gitnflow."
+		warn "To force reinitialization, use: git nflow init -f"
+		exit 0
+	fi
+
+
+    if flag defaults; then
+        warn "Using default branch names."
+    fi
+
+	local answer
+
+    #### add remote
+    local remote
+    if gitnflow_has_remote_configured && ! flag force; then
+        remote=$(git config --get gitnflow.remote)
+    else
+        local default_suggestion="origin"
+		printf "Remote name: [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		remote=${answer:-$default_suggestion}
+		git_do config gitnflow.remote "$remote"
+    fi
+
+	local branch_count
+	# add a master branch if no such branch exists yet
+	local master_branch
+	if gitnflow_has_master_configured && ! flag force; then
+		master_branch=$(git config --get gitnflow.branch.master)
+	else
+		# Two cases are distinguished:
+		# 1. A fresh git repo (without any branches)
+		#    We will create a new master/develop/test/preview branch for the user
+		# 2. Some branches do already exist
+		#    We will disallow creation of new master/develop/test/preview branches and
+		#    rather allow to use existing branches for git-flow.
+		local default_suggestion
+		local should_check_existence
+		branch_count=$(git_local_branches | wc -l)
+		if [ "$branch_count" -eq 0 ]; then
+			echo "No branches exist yet. Base branches must be created now."
+			should_check_existence=NO
+			default_suggestion=$(git config --get gitnflow.branch.master || echo master)
+		else
+			echo
+			echo "Which branch should be used for bringing forth production releases?"
+			git_local_branches | sed 's/^.*$/   - &/g'
+
+			should_check_existence=YES
+			default_suggestion=
+			for guess in $(git config --get gitnflow.branch.master) \
+			             'production' 'pro' 'prod' 'main' 'master'; do
+				if git_local_branch_exists "$guess"; then
+					default_suggestion="$guess"
+					break
+				fi
+			done
+		fi
+
+		printf "Branch name for production releases: [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		master_branch=${answer:-$default_suggestion}
+
+		# check existence in case of an already existing repo
+		if [ "$should_check_existence" = "YES" ]; then
+			# if no local branch exists and a remote branch of the same
+			# name exists, checkout that branch and use it for master
+			if ! git_local_branch_exists "$master_branch" && git_remote_branch_exists "$remote/$master_branch"; then
+				git_do branch "$master_branch" "$remote/$master_branch" >/dev/null 2>&1
+			elif ! git_local_branch_exists "$master_branch"; then
+				die "Local branch '$master_branch' does not exist."
+			fi
+		fi
+
+		# store the name of the master branch
+		git_do config gitnflow.branch.master "$master_branch"
+	fi
+
+	# add a develop branch if no such branch exists yet
+	local develop_branch
+	if gitnflow_has_develop_configured && ! flag force; then
+		develop_branch=$(git config --get gitnflow.branch.develop)
+	else
+		# Again, the same two cases as with the master selection are
+		# considered (fresh repo or repo that contains branches)
+		local default_suggestion
+		local should_check_existence
+		branch_count=$(git_local_branches | grep -v "^${master_branch}\$" | wc -l)
+		if [ "$branch_count" -eq 0 ]; then
+			should_check_existence=NO
+			default_suggestion=$(git config --get gitnflow.branch.develop || echo dev)
+		else
+			echo
+			echo "Which branch should be used for develop?"
+			git_local_branches | grep -v "^${master_branch}\$" | sed 's/^.*$/   - &/g'
+
+			should_check_existence=YES
+			default_suggestion=
+			for guess in $(git config --get gitnflow.branch.develop) \
+			             'dev' 'develop' 'integration'; do
+				if git_local_branch_exists "$guess" && ! has $guess "$master_branch"; then
+					default_suggestion="$guess"
+					break
+				fi
+			done
+
+			if [ -z $default_suggestion ]; then
+				should_check_existence=NO
+				default_suggestion=$(git config --get gitflow.branch.develop || echo dev)
+			fi
+		fi
+
+		printf "Branch name for develop: [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		develop_branch=${answer:-$default_suggestion}
+
+		if has_repetition "$master_branch" "$develop_branch" ; then
+			die "develop_branch and master_branch branches should differ."
+		fi
+
+		# check existence in case of an already existing repo
+		if [ "$should_check_existence" = "YES" ]; then
+		    # if no local branch exists and a remote branch of the same
+			# name exists, checkout that branch and use it for master
+			if ! git_local_branch_exists "$develop_branch" && git_remote_branch_exists "$remote/$develop_branch"; then
+				git_do branch "$develop_branch" "$remote/$develop_branch" >/dev/null 2>&1
+			elif ! git_local_branch_exists "$develop_branch"; then
+				die "Local branch '$develop_branch' does not exist."
+			fi
+		fi
+
+		# store the name of the develop branch
+		git_do config gitnflow.branch.develop "$develop_branch"
+	fi
+
+
+	# add a test branch if no such branch exists yet
+	local test_branch
+	if gitnflow_has_test_configured && ! flag force; then
+		test_branch=$(git config --get gitnflow.branch.test)
+	else
+		# Again, the same two cases as with the master selection are
+		# considered (fresh repo or repo that contains branches)
+		local default_suggestion
+		local should_check_existence
+		branch_count=$(git_local_branches | grep -v "^${master_branch}\$" | grep -v "^${develop_branch}\$" | wc -l)
+		if [ "$branch_count" -eq 0 ]; then
+			should_check_existence=NO
+			default_suggestion=$(git config --get gitnflow.branch.test || echo test)
+		else
+			echo
+			echo "Which branch should be used for test?"
+			git_local_branches | grep -v "^${master_branch}\$" | grep -v "^${develop_branch}\$" | sed 's/^.*$/   - &/g'
+
+			should_check_existence=YES
+			default_suggestion=
+			for guess in $(git config --get gitnflow.branch.test) \
+			             'test'; do
+				if git_local_branch_exists "$guess" && ! has $guess "$master_branch" "$develop_branch"; then
+					default_suggestion="$guess"
+					break
+				fi
+			done
+
+			if [ -z $default_suggestion ]; then
+				should_check_existence=NO
+				default_suggestion=$(git config --get gitnflow.branch.test || echo test)
+			fi
+		fi
+
+		printf "Branch name for test: [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		test_branch=${answer:-$default_suggestion}
+
+		if has_repetition "$master_branch" "$develop_branch" "$test_branch" ; then
+			die "develop_branch , master_branch and test_branch branches should differ."
+		fi
+
+		# check existence in case of an already existing repo
+		if [ "$should_check_existence" = "YES" ]; then
+		    # if no local branch exists and a remote branch of the same
+			# name exists, checkout that branch and use it for master
+			if ! git_local_branch_exists "$test_branch" && git_remote_branch_exists "$remote/$test_branch"; then
+				git_do branch "$test_branch" "$remote/$test_branch" >/dev/null 2>&1
+			elif ! git_local_branch_exists "$test_branch"; then
+				die "Local branch '$test_branch' does not exist."
+			fi
+		fi
+
+		# store the name of the test branch
+		git_do config gitnflow.branch.test "$test_branch"
+	fi
+
+
+	# add a preview branch if no such branch exists yet
+	local preview_branch
+	if gitnflow_has_preview_configured && ! flag force; then
+		preview_branch=$(git config --get gitnflow.branch.preview)
+	else
+		# Again, the same two cases as with the master selection are
+		# considered (fresh repo or repo that contains branches)
+		local default_suggestion
+		local should_check_existence
+		branch_count=$(git_local_branches | grep -v "^${master_branch}\$" | grep -v "^${develop_branch}\$" | grep -v "^${test_branch}\$" | wc -l)
+		if [ "$branch_count" -eq 0 ]; then
+			should_check_existence=NO
+			default_suggestion=$(git config --get gitnflow.branch.preview || echo preview)
+		else
+			echo
+			echo "Which branch should be used for preview?"
+			git_local_branches | grep -v "^${master_branch}\$" | grep -v "^${develop_branch}\$" | grep -v "^${test_branch}\$" | sed 's/^.*$/   - &/g'
+
+			should_check_existence=YES
+			default_suggestion=
+			for guess in $(git config --get gitnflow.branch.preview) \
+			             'preview' 'pre' 'release' ; do
+				if git_local_branch_exists "$guess" && ! has $guess "$master_branch" "$develop_branch" "$test_branch"; then
+					default_suggestion="$guess"
+					break
+				fi
+			done
+
+			if [ -z $default_suggestion ]; then
+				should_check_existence=NO
+				default_suggestion=$(git config --get gitnflow.branch.preview || echo preview)
+			fi
+		fi
+
+		printf "Branch name for preview: [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		preview_branch=${answer:-$default_suggestion}
+
+		if has_repetition "$master_branch" "$develop_branch" "$test_branch" "$preview_branch"; then
+			die "develop_branch , master_branch , test_branch and preview_branch branches should differ."
+		fi
+
+		# check existence in case of an already existing repo
+		if [ "$should_check_existence" = "YES" ]; then
+		    # if no local branch exists and a remote branch of the same
+			# name exists, checkout that branch and use it for master
+			if ! git_local_branch_exists "$preview_branch" && git_remote_branch_exists "$remote/$preview_branch"; then
+				git_do branch "$preview_branch" "$remote/$preview_branch" >/dev/null 2>&1
+			elif ! git_local_branch_exists "$preview_branch"; then
+				die "Local branch '$preview_branch' does not exist."
+			fi
+		fi
+
+		# store the name of the preview branch
+		git_do config gitnflow.branch.preview "$preview_branch"
+	fi
+
+
+	# Creation of HEAD
+	# ----------------
+	# We create a HEAD now, if it does not exist yet (in a fresh repo). We need
+	# it to be able to create new branches.
+	if ! git rev-parse --quiet --verify HEAD >/dev/null 2>&1; then
+		git_do symbolic-ref HEAD "refs/heads/$master_branch"
+		git_do commit --allow-empty --quiet -m "Initial commit"
+	fi
+
+	# Creation of master
+	# ------------------
+	# At this point, there always is a master branch: either it existed already
+	# (and was picked interactively as the production branch) or it has just
+	# been created in a fresh repo
+
+	# Creation of develop
+	# -------------------
+	# The develop branch possibly does not exist yet.  This is the case when,
+	# in a git init'ed repo with one or more commits, master was picked as the
+	# default production branch and develop was "created".  We should create
+	# the develop branch now in that case (we base it on master, of course)
+	if ! git_local_branch_exists "$develop_branch"; then
+		if git_remote_branch_exists "$remote/$develop_branch"; then
+			git_do branch "$develop_branch" "$remote/$develop_branch" >/dev/null 2>&1
+		else
+			git_do branch --no-track "$develop_branch" "$master_branch"
+		fi
+	fi
+
+	# Creation of test
+	# -------------------
+	# The test branch possibly does not exist yet.  This is the case when,
+	# in a git init'ed repo with one or more commits, master was picked as the
+	# default production branch and test was "created".  We should create
+	# the test branch now in that case (we base it on master, of course)
+	if ! git_local_branch_exists "$test_branch"; then
+		if git_remote_branch_exists "$remote/$test_branch"; then
+			git_do branch "$test_branch" "$remote/$test_branch" >/dev/null 2>&1
+		else
+			git_do branch --no-track "$test_branch" "$master_branch"
+		fi
+	fi
+
+	# Creation of preview
+	# -------------------
+	# The preview branch possibly does not exist yet.  This is the case when,
+	# in a git init'ed repo with one or more commits, master was picked as the
+	# default production branch and preview was "created".  We should create
+	# the preview branch now in that case (we base it on master, of course)
+	if ! git_local_branch_exists "$preview_branch"; then
+		if git_remote_branch_exists "$remote/$preview_branch"; then
+			git_do branch "$preview_branch" "$remote/$preview_branch" >/dev/null 2>&1
+		else
+			git_do branch --no-track "$preview_branch" "$master_branch"
+		fi
+	fi
+
+	# assert the gitnflow repo has been correctly initialized
+	gitflow_is_initialized
+
+	# finally, ask the user for naming conventions (branch prefixes)
+	if flag force || \
+	   ! git config --get gitflow.prefix.feature >/dev/null 2>&1 ; then
+		echo
+		echo "How to name your supporting branch prefixes?"
+	fi
+
+	local prefix
+
+	# Feature branches
+	if ! git config --get gitnflow.prefix.feature >/dev/null 2>&1 || flag force; then
+		default_suggestion=$(git config --get gitnflow.prefix.feature || echo feature/)
+		printf "Feature branches? [$default_suggestion] "
+		if noflag defaults; then
+			read answer
+		else
+			printf "\n"
+		fi
+		#### when input is "-", set prefix=
+		#### when input is not "-", set prefix using answer and default_suggestion
+		[ "$answer" = "-" ] && prefix= || prefix=${answer:-$default_suggestion}
+		git_do config gitnflow.prefix.feature "$prefix"
+	fi
+}
+
+cmd_help() {
+	usage
+	exit 0
+}

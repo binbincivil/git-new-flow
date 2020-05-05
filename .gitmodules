@@ -1,0 +1,6 @@
+[submodule "shflags"]
+	path = shflags
+	url = https://github.com/kward/shflags.git
+[submodule "gitflow"]
+	path = gitflow
+	url = https://github.com/nvie/gitflow.git
