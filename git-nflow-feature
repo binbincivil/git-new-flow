@@ -305,10 +305,15 @@ branch_to_dtpm_branch() {
 	# sanity checks
 	require_clean_working_tree
 
-	# update local repo with remote changes first, if asked
+	# update local $BRANCH branch with remote changes first, if asked
 	if has "$REMOTE/$BRANCH" $(git_remote_branches); then
 		if noflag no_fetch; then
 			git_do fetch -q "$REMOTE" "$BRANCH"
+		fi
+	fi
+	# update local $DESCINATION_BRANCH branch with remote changes first, if asked
+	if has "$REMOTE/$DESCINATION_BRANCH" $(git_remote_branches); then
+		if noflag no_fetch; then
 			git_do fetch -q "$REMOTE" "$DESCINATION_BRANCH"
 		fi
 	fi
