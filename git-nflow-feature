@@ -18,24 +18,28 @@ usage() {
 	echo "       git nflow feature finish [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing finish, default is do fetch"
 	echo "          -p: push to remote after performing finish"
+	echo "          -l: pull \${finish} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
 
 	echo "       git nflow feature dev [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing dev, default is do fetch"
 	echo "          -p: push to remote after performing dev"
+	echo "          -l: pull \${dev} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
 
 	echo "       git nflow feature test [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing test, default is do fetch"
 	echo "          -p: push to remote after performing test"
+	echo "          -l: pull \${test} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
 
 	echo "       git nflow feature preview [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing preview, default is do fetch"
 	echo "          -p: push to remote after performing preview"
+	echo "          -l: pull \${preview} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
 
@@ -230,32 +234,37 @@ cmd_start() {
 #### git nflow feature dev [-nrSp] [<name|nameprefix>]
 cmd_dev() {
     DESCINATION_BRANCH="$DEVELOP_BRANCH"
-    branch_to_dtpm_branch "$@"
+    dtpf="dev"
+    branch_to_dtpf_branch "$@"
 }
 
 #### git nflow feature test [-nrSp] [<name|nameprefix>]
 cmd_test() {
     DESCINATION_BRANCH="$TEST_BRANCH"
-    branch_to_dtpm_branch "$@"
+    dtpf="test"
+    branch_to_dtpf_branch "$@"
 }
 
 #### git nflow feature preview [-nrSp] [<name|nameprefix>]
 cmd_preview() {
     DESCINATION_BRANCH="$PREVIEW_BRANCH"
-    branch_to_dtpm_branch "$@"
+    dtpf="preview"
+    branch_to_dtpf_branch "$@"
 }
 
 #### git nflow feature finish [-nrSp] [<name|nameprefix>]
 cmd_finish() {
     DESCINATION_BRANCH="$MASTER_BRANCH"
-    branch_to_dtpm_branch "$@"
+    dtpf="finish"
+    branch_to_dtpf_branch "$@"
 }
 
-branch_to_dtpm_branch() {
+branch_to_dtpf_branch() {
     DEFINE_boolean no_fetch false "do not fetch from $REMOTE before performing finish, default is do fetch" n
 	DEFINE_boolean rebase false "rebase instead of merge" r
 	DEFINE_boolean squash false "squash feature during merge" S
 	DEFINE_boolean push false "push to $REMOTE after performing finish" p
+	DEFINE_boolean pull false "pull branch from remote before performing" l
 	parse_args "$@"
 	expand_nameprefix_arg_or_current
 
@@ -274,7 +283,7 @@ branch_to_dtpm_branch() {
 		# exit code for "unmerged changes in working tree", which we should
 		# actually be testing for here
 		if git_is_clean_working_tree; then
-			FINISH_BASE=$(cat "$DOT_GIT_DIR/.gitflow/MERGE_BASE")
+			FINISH_BASE=$(cat "$DOT_GIT_DIR/.gitnflow/MERGE_BASE")
 
 			# Since the working tree is now clean, either the user did a
 			# succesfull merge manually, or the merge was cancelled.
@@ -296,7 +305,7 @@ branch_to_dtpm_branch() {
 			echo "    git commit"
 			echo
 			echo "You can then complete the finish by running it again:"
-			echo "    git nflow feature finish $NAME"
+			echo "    git nflow feature $dtpf $NAME"
 			echo
 			exit 1
 		fi
@@ -316,6 +325,22 @@ branch_to_dtpm_branch() {
 		if noflag no_fetch; then
 			git_do fetch -q "$REMOTE" "$DESCINATION_BRANCH"
 		fi
+		# pull
+        if flag pull; then
+            git_do checkout "$DESCINATION_BRANCH" || die "Could not check out $DESCINATION_BRANCH."
+            git_do pull "$REMOTE" "$DESCINATION_BRANCH"
+            if [ $? -ne 0 ]; then
+                echo
+                echo "There were merge conflicts when pull $DESCINATION_BRANCH from $REMOTE/$DESCINATION_BRANCH. To resolve the merge conflict manually, use:"
+                echo "    git mergetool"
+                echo "    git commit"
+                echo
+                echo "You can then complete the finish by running it again:"
+                echo "    git nflow feature $dtpf $NAME"
+                echo
+                exit 1
+            fi
+        fi
 	fi
 
 	if has "$REMOTE/$BRANCH" $(git_remote_branches); then
@@ -332,7 +357,7 @@ branch_to_dtpm_branch() {
 			warn "Finish was aborted due to conflicts during rebase."
 			warn "Please finish the rebase manually now."
 			warn "When finished, re-run:"
-			warn "    git nflow feature finish '$NAME' '$DESCINATION_BRANCH'"
+			warn "    git nflow feature $dtpf '$NAME' '$DESCINATION_BRANCH'"
 			exit 1
 		fi
 	fi
@@ -357,12 +382,12 @@ branch_to_dtpm_branch() {
 		mkdir -p "$DOT_GIT_DIR/.gitnflow"
 		echo "$DESCINATION_BRANCH" > "$DOT_GIT_DIR/.gitnflow/MERGE_BASE"
 		echo
-		echo "There were merge conflicts. To resolve the merge conflict manually, use:"
+		echo "There were merge when merge $BRANCH into $DESCINATION_BRANCH.  To resolve the merge conflict manually, use:"
 		echo "    git mergetool"
 		echo "    git commit"
 		echo
 		echo "You can then complete the finish by running it again:"
-		echo "    git nflow feature finish $NAME"
+		echo "    git nflow feature $dtpf $NAME"
 		echo
 		exit 1
 	fi
@@ -374,6 +399,9 @@ branch_to_dtpm_branch() {
 
 	echo
 	echo "Summary of actions:"
+	if flag pull; then
+	    echo "- pull $DESCINATION_BRANCH from $REMOTE/$DESCINATION_BRANCH"
+	fi
 	echo "- The feature branch '$BRANCH' was merged into '$DESCINATION_BRANCH'"
 	#echo "- Merge conflicts were resolved"		# TODO: Add this line when it's supported
 	echo "- Feature branch '$BRANCH' is still available"
