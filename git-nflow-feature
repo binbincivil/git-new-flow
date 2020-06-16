@@ -196,6 +196,7 @@ parse_args() {
 
 #### git nflow feature start [-f] <name> [<base>]
 cmd_start() {
+  DEFINE_boolean no_fetch false "do not fetch from remote before performing start, default is do fetch" n
 	DEFINE_boolean fetch false 'fetch from origin before performing local operation' f
 	parse_args "$@"
 	BASE=${2:-$MASTER_BRANCH}
@@ -204,10 +205,12 @@ cmd_start() {
 	# sanity checks
 	require_branch_absent "$BRANCH"
 
-	# update the local repo with remote changes, if asked
-	if flag fetch; then
-		git_do fetch -q "$REMOTE" "$MASTER_BRANCH"
-	fi
+	# do not fetch from remote before performing start, default is do fetch
+  if has "$REMOTE/$MASTER_BRANCH" $(git_remote_branches); then
+    if noflag no_fetch; then
+    git_do fetch -q "$REMOTE" "$MASTER_BRANCH"
+    fi
+  fi
 
 	# if the remote branch counterpart exists, assert that the local branch
 	# isn't behind it (to avoid unnecessary rebasing)
