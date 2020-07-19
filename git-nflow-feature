@@ -255,6 +255,11 @@ cmd_preview() {
     branch_to_dtpf_branch "$@"
 }
 
+#### pv is short for preview
+cmd_pv() {
+    cmd_preview "$@"
+}
+
 #### git nflow feature finish [-nrSp] [<name|nameprefix>]
 cmd_finish() {
     DESCINATION_BRANCH="$MASTER_BRANCH"
