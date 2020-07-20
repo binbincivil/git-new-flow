@@ -12,8 +12,10 @@ usage() {
 	echo "usage: git nflow feature [list] [-v]"
 	echo "          -v: verbose"
 
-	echo "       git nflow feature start [-F] <name> [<base>]"
+	echo "       git nflow feature start [-nfl] <name> [<base>]"
+	echo "          -n: do not fetch from remote before performing start, default is do fetch"
 	echo "          -f: fetch from origin before performing local operation"
+	echo "          -l: pull from origin before performing local operation"
 
 	echo "       git nflow feature finish [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing finish, default is do fetch"
@@ -194,11 +196,13 @@ parse_args() {
 }
 
 
-#### git nflow feature start [-f] <name> [<base>]
+#### git nflow feature start [-nfl] <name> [<base>]
 cmd_start() {
-  DEFINE_boolean no_fetch false "do not fetch from remote before performing start, default is do fetch" n
+    DEFINE_boolean no_fetch false "do not fetch from remote before performing start, default is do fetch" n
 	DEFINE_boolean fetch false 'fetch from origin before performing local operation' f
+	DEFINE_boolean pull false 'pull from origin before performing local operation' l
 	parse_args "$@"
+	eval set -- "${FLAGS_ARGV}"
 	BASE=${2:-$MASTER_BRANCH}
 	require_name_arg
 
@@ -206,15 +210,18 @@ cmd_start() {
 	require_branch_absent "$BRANCH"
 
 	# do not fetch from remote before performing start, default is do fetch
-  if has "$REMOTE/$MASTER_BRANCH" $(git_remote_branches); then
-    if noflag no_fetch; then
-    git_do fetch -q "$REMOTE" "$MASTER_BRANCH"
+    if has "$REMOTE/$MASTER_BRANCH" $(git_remote_branches); then
+        if noflag no_fetch; then
+            git_do fetch -q "$REMOTE" "$MASTER_BRANCH"
+        fi
     fi
-  fi
 
 	# if the remote branch counterpart exists, assert that the local branch
 	# isn't behind it (to avoid unnecessary rebasing)
 	if git_branch_exists "$REMOTE/$MASTER_BRANCH"; then
+	    if flag pull; then
+            git_do checkout -q "$MASTER_BRANCH" && git_do pull -q "$REMOTE" "$MASTER_BRANCH"
+        fi
 		require_branches_equal "$MASTER_BRANCH" "$REMOTE/$MASTER_BRANCH"
 	fi
 
@@ -225,6 +232,11 @@ cmd_start() {
 
 	echo
 	echo "Summary of actions:"
+    if git_branch_exists "$REMOTE/$MASTER_BRANCH"; then
+        if flag pull; then
+            echo "- Pull master branch from $REMOTE/$MASTER_BRANCH"
+        fi
+	fi
 	echo "- A new branch '$BRANCH' was created, based on '$BASE'"
 	echo "- You are now on branch '$BRANCH'"
 	echo ""
