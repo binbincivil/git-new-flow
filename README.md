@@ -61,3 +61,11 @@ git nflow feature finish [<name|nameprefix>]
 ```
 git nflow feature delete [<name|nameprefix>]
 ```
+
+
+### Best Practices
+
+```
+alias gnf="git nflow"
+alias gnff="git nflow feature"
+```
