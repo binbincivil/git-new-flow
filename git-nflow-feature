@@ -23,6 +23,7 @@ usage() {
 	echo "          -l: pull \${finish} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
+	echo "          -b: checkout previous branch after performing"
 
 	echo "       git nflow feature dev [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing dev, default is do fetch"
@@ -30,6 +31,7 @@ usage() {
 	echo "          -l: pull \${dev} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
+	echo "          -b: checkout previous branch after performing"
 
 	echo "       git nflow feature test [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing test, default is do fetch"
@@ -37,6 +39,7 @@ usage() {
 	echo "          -l: pull \${test} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
+	echo "          -b: checkout previous branch after performing"
 
 	echo "       git nflow feature preview [-nrSp] [<name|nameprefix>]"
 	echo "          -n: do not fetch from remote before performing preview, default is do fetch"
@@ -44,6 +47,7 @@ usage() {
 	echo "          -l: pull \${preview} branch from remote before performing merge"
 	echo "          -r: rebase instead of merge"
 	echo "          -S: squash feature during merge"
+	echo "          -b: checkout previous branch after performing"
 
 	echo "       git nflow feature push [<name>]"
 
@@ -285,6 +289,7 @@ branch_to_dtpf_branch() {
 	DEFINE_boolean squash false "squash feature during merge" S
 	DEFINE_boolean push false "push to $REMOTE after performing finish" p
 	DEFINE_boolean pull false "pull branch from remote before performing" l
+	DEFINE_boolean back false "checkout previous branch after performing" b
 	parse_args "$@"
 	expand_nameprefix_arg_or_current
 
@@ -382,6 +387,8 @@ branch_to_dtpf_branch() {
 		fi
 	fi
 
+    local previous_branch=$(git_current_branch)
+
 	# merge into BASE
 	git_do checkout "$DESCINATION_BRANCH"
 	if [ "$(git rev-list -n2 "$DESCINATION_BRANCH..$BRANCH" | wc -l)" -eq 1 ]; then
@@ -417,6 +424,10 @@ branch_to_dtpf_branch() {
 		git_do push "$REMOTE" "$DESCINATION_BRANCH" || die "Could not push to $DESCINATION_BRANCH from $REMOTE."
 	fi
 
+    if flag back; then
+		git_do checkout "$previous_branch" || die "Could not check out previous_branch $previous_branch."
+	fi
+
 	echo
 	echo "Summary of actions:"
 	if flag pull; then
@@ -428,7 +439,11 @@ branch_to_dtpf_branch() {
 	if flag push; then
 	    echo "- push $DESCINATION_BRANCH to $REMOTE"
 	fi
-	echo "- You are now on branch '$DESCINATION_BRANCH'"
+	if flag back; then
+	    echo "- You are now on branch '$previous_branch'"
+	else
+	    echo "- You are now on branch '$DESCINATION_BRANCH'"
+	fi
 	echo "When you want delete this feature branch, use:"
 	echo "    git nflow feature delete $NAME"
 	echo
