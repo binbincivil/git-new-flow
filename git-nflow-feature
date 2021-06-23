@@ -387,7 +387,7 @@ branch_to_dtpf_branch() {
 		fi
 	fi
 
-    local previous_branch=$(git_current_branch)
+        local previous_branch=$(git_current_branch)
 
 	# merge into BASE
 	git_do checkout "$DESCINATION_BRANCH"
@@ -424,7 +424,7 @@ branch_to_dtpf_branch() {
 		git_do push "$REMOTE" "$DESCINATION_BRANCH" || die "Could not push to $DESCINATION_BRANCH from $REMOTE."
 	fi
 
-    if flag back; then
+        if flag back; then
 		git_do checkout "$previous_branch" || die "Could not check out previous_branch $previous_branch."
 	fi
 
