@@ -2,7 +2,7 @@ git-nflow
 ========
 
 A collection of Git extensions to provide high-level repository operations
-for [new git branching model](https://blog.csdn.net/bingospunky/article/details/105931271).
+for [new git branching model](https://github.com/binbincivil/git-new-flow/wiki).
 
 <img src="https://img-blog.csdnimg.cn/20200505131508750.jpeg?x-oss-process=image/watermark,type_ZmFuZ3poZW5naGVpdGk,shadow_10,text_aHR0cHM6Ly9ibG9nLmNzZG4ubmV0L3UwMTE2NDc5NjI=,size_16,color_FFFFFF,t_70" alt="git-new-flow分支模型" width="360" height="480" align="bottom" />
 
